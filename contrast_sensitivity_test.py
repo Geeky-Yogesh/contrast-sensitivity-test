@@ -50,19 +50,32 @@ class ContrastSensitivityTest:
     def generate_pelli_robson_chart(self):
         chart_width, chart_height = 900, 600
         img = np.ones((chart_height, chart_width, 3), dtype=np.uint8) * 240
-        # Standard Clinical LogCS steps
-        log_cs_steps = [0.00, 0.15, 0.30, 0.45, 0.60, 0.75, 0.90, 1.05, 1.20, 1.35, 1.50, 1.65]
+        # Standard Clinical LogCS steps - each step repeats for 3 letters (groups)
+        log_cs_steps = [0.00, 0.00, 0.00, 0.15, 0.15, 0.15, 0.30, 0.30, 0.30, 
+                       0.45, 0.45, 0.45, 0.60, 0.60, 0.60, 0.75, 0.75, 0.75,
+                       0.90, 0.90, 0.90, 1.05, 1.05, 1.05, 1.20, 1.20, 1.20,
+                       1.35, 1.35, 1.35, 1.50, 1.50, 1.50, 1.65, 1.65, 1.65]
         chart_data = []
         
-        for i, log_val in enumerate(log_cs_steps):
-            contrast = 1 / (10**log_val)
-            text_val = int(240 * (1.0 - contrast))
+        # Generate letters for Pelli-Robson chart
+        letters_sequence = []
+        current_group = 0
+        for log_val in log_cs_steps:
             letter = random.choice('NHRSDKV')
-            row, col = i // 3, i % 3
-            x, y = col * 300 + 150, row * 150 + 100
-            cv2.putText(img, letter, (x-40, y+40), cv2.FONT_HERSHEY_SIMPLEX, 3, 
-                        (text_val, text_val, text_val), 8)
-            chart_data.append({'letter': letter, 'log_cs': log_val})
+            letters_sequence.append({'letter': letter, 'log_cs': log_val, 'group': current_group})
+            # Move to next group after 3 letters
+            if len([l for l in letters_sequence if l['log_cs'] == log_val]) % 3 == 0 and log_val != letters_sequence[-1]['log_cs']:
+                current_group += 1
+        
+        # Layout the chart in rows
+        for i, item in enumerate(letters_sequence):
+            contrast = 1 / (10**item['log_cs'])
+            text_val = int(240 * (1.0 - contrast))
+            row, col = i // 6, i % 6  # 6 letters per row
+            x, y = col * 140 + 80, row * 120 + 80
+            cv2.putText(img, item['letter'], (x-20, y+20), cv2.FONT_HERSHEY_SIMPLEX, 2, 
+                       (text_val, text_val, text_val), 6)
+            chart_data.append(item)
             
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         return {'image': Image.fromarray(img_rgb), 'data': chart_data}
@@ -78,9 +91,11 @@ class ContrastSensitivityTest:
             st.session_state.contrast_test_started = False
 
     def get_clinical_category(self, log_cs):
-        if log_cs >= 1.65: return "Normal", "🟢 Excellent contrast sensitivity."
-        if log_cs >= 1.35: return "Fair", "🟡 Slightly reduced. Consider checkup."
-        return "Abnormal", "🔴 Significant contrast loss. Consult a doctor."
+        if log_cs >= 1.80: return "Excellent", "🟢 Superior contrast sensitivity. Well above average."
+        if log_cs >= 1.50: return "Normal", "🟢 Normal contrast sensitivity for healthy eyes."
+        if log_cs >= 1.20: return "Fair", "🟡 Slightly reduced. Monitor over time."
+        if log_cs >= 0.90: return "Mild Loss", "🟠 Mild contrast sensitivity reduction."
+        return "Significant Loss", "🔴 Significant contrast loss. Consult eye doctor."
 
     def calculate_distance_from_face(self, frame):
         try:
